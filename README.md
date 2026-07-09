@@ -5,21 +5,22 @@ Deployable Socket.IO website for live remote cricket draft rooms.
 ## Run Locally
 
 ```powershell
-cd C:\Users\Admin\Documents\Codex\2026-07-09\i\outputs\cricket-online
-C:\Users\Admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\pnpm.cmd install
-C:\Users\Admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe server.js 3100
+git clone https://github.com/thedhoklamonger/cricket-1v1.git
+cd cricket-1v1
+pnpm install
+pnpm start
 ```
 
 Open:
 
 ```text
-http://localhost:3100
+http://localhost:3000
 ```
 
 Create a room, then use **Copy Link**. The link will look like:
 
 ```text
-http://localhost:3100/room/ABC123
+http://localhost:3000/room/ABC123
 ```
 
 On a published website it will use your real domain:
@@ -48,16 +49,15 @@ The smoke test creates a room, loads its `/room/ROOMCODE` URL, joins from a seco
 - Server validates every spin, skip, pick, slot, speed, and skip-to-end request.
 - Clients receive personalized `room:update` snapshots.
 - Browsers store a private per-room reconnect key so refreshes and short disconnects can reclaim the same player seat.
-- Player data is self-contained in `data/players.json`, with a compressed `data/players.json.gz.b64` fallback for compact publishing.
+- Player data loads from `data/players.json` when present, or from the compact `data/players.json.gz.b64` file included in this repo.
 - Room state is saved to `data/rooms.json` by default.
 
 See `EVENTS.md` for the event contract and `DEPLOYMENT.md` for publishing instructions.
 
 ## Publish Checklist
 
-1. Put the `cricket-online` folder in a GitHub repository.
-2. Deploy as a Node web service, not a static site. Socket.IO needs a running server.
-3. Use:
+1. Deploy this repository as a Node web service, not a static site. Socket.IO needs a running server.
+2. Use:
 
 ```text
 Runtime: Node 20 or newer
@@ -67,9 +67,9 @@ Health check path: /healthz
 Instance count: 1
 ```
 
-4. Make sure the host provides a `PORT` environment variable. The server binds to `0.0.0.0` and uses `process.env.PORT`.
-5. Give the app persistent disk/storage if the host supports it, and keep `data/rooms.json` on that disk.
-6. Keep the app on one server instance unless you add a shared Socket.IO adapter such as Redis.
+3. Make sure the host provides a `PORT` environment variable. The server binds to `0.0.0.0` and uses `process.env.PORT`.
+4. Give the app persistent disk/storage if the host supports it, and keep `data/rooms.json` on that disk.
+5. Keep the app on one server instance unless you add a shared Socket.IO adapter such as Redis.
 
 ## Storage
 
