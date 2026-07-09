@@ -22,12 +22,14 @@ Adds a player to a lobby room and returns `{ roomId, playerId, playerKey }`. If 
 Payload: `{ settings }`
 
 Host-only. Updates lobby settings before the draft starts.
+Supported `settings.gameMode` values are `cpu`, `duel`, and `tournament`.
 
 `game:start`
 
 Payload: `{}`
 
 Host-only. Locks the lobby, builds teams, and starts the snake draft.
+Solo CPU rooms require one human player; duel rooms require two; tournament rooms require the selected player count.
 
 `draft:spin`
 
@@ -40,6 +42,12 @@ Active-player only. Draws a country and decade. If `skip` is true, consumes one 
 Payload: `{ cardId, slot }`
 
 Active-player only. Drafts a card into a legal batting slot, advances the snake draft, and clears the draw.
+
+`draft:auto`
+
+Payload: `{}`
+
+Host-only. Automatically completes the remaining draft picks using the same legal slot and wicketkeeper rules as manual picks. This is useful for solo CPU play or for quickly finishing test rooms.
 
 `match:startNext`
 
@@ -58,6 +66,12 @@ Sets live match speed to `1`, `2`, or `4`.
 Payload: `{}`
 
 Finishes the running match immediately. If no match is running, completes the next pending fixture instantly.
+
+`match:reset`
+
+Payload: `{}`
+
+Host-only. Clears completed/live match results and rebuilds the fixture list from the drafted teams.
 
 `room:snapshot`
 
@@ -85,5 +99,6 @@ Human-readable validation error.
 - `playerKey` is never included in `room:update`; it is only returned to the joining browser.
 - `viewer.isHost` controls settings and start-game UI.
 - `viewer.isActive` controls draft buttons.
+- `draft.isCpuTurn` tells the client to wait while the server drafts for the CPU team.
 - `pool[].slots` is computed by the server and is the only set of legal slots the client should display.
 - The server revalidates every action even when the client hides illegal controls.

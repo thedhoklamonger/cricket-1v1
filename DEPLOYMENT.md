@@ -4,7 +4,7 @@ This app is a live multiplayer website. Deploy it as a Node web service with Web
 
 ## What To Upload
 
-Upload the whole `cricket-online` folder:
+Upload the whole `cricket-1v1` repository:
 
 ```text
 server.js
@@ -90,4 +90,4 @@ pnpm check
 pnpm smoke
 ```
 
-The smoke test starts a temporary server, creates a room, opens the room URL, joins as a second player, reconnects the host, and starts the draft.
+The smoke test starts a temporary server, creates a room, opens the room URL, joins as a second player, reconnects the host, starts the draft, then verifies a solo CPU room can auto-complete its draft.

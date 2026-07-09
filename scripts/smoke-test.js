@@ -20,6 +20,24 @@ function waitForConnect(socket) {
   });
 }
 
+function waitForUpdate(socket, predicate, label) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socket.off("room:update", onUpdate);
+      reject(new Error(`${label} did not update in time.`));
+    }, 8000);
+
+    function onUpdate(snapshot) {
+      if (!predicate(snapshot)) return;
+      clearTimeout(timer);
+      socket.off("room:update", onUpdate);
+      resolve(snapshot);
+    }
+
+    socket.on("room:update", onUpdate);
+  });
+}
+
 function assertOk(response, label) {
   if (!response?.ok) {
     throw new Error(`${label} failed: ${response?.message || "no acknowledgement"}`);
@@ -71,11 +89,26 @@ async function closeServer() {
 
   assertOk(await emit(reclaimedHost, "game:start"), "game:start after reconnect");
 
+  const solo = Client(baseUrl);
+  await waitForConnect(solo);
+  const soloCreated = assertOk(await emit(solo, "room:create", {
+    playerName: "Solo",
+    settings: { gameMode: "cpu", overs: 5, seriesMatches: 1 }
+  }), "solo room:create");
+  assertOk(await emit(solo, "game:start"), "solo game:start");
+  const soloReady = waitForUpdate(solo, (snapshot) => snapshot.phase === "matches" && snapshot.teams.some((team) => team.cpu), "solo CPU room");
+  const autoDrafted = assertOk(await emit(solo, "draft:auto"), "solo draft:auto");
+  if (!autoDrafted.picks || autoDrafted.picks < 22) {
+    throw new Error("solo draft:auto did not complete a two-team draft.");
+  }
+  await soloReady;
+
   host.close();
   guest.close();
   reclaimedHost.close();
+  solo.close();
   await closeServer();
-  console.log(`Smoke test passed: room ${created.roomId} linked, joined, reconnected, and started.`);
+  console.log(`Smoke test passed: room ${created.roomId} linked, joined, reconnected, and solo CPU room ${soloCreated.roomId} drafted.`);
 })().catch(async (error) => {
   console.error(error);
   try {

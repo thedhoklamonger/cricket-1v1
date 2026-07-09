@@ -38,15 +38,17 @@ pnpm check
 pnpm smoke
 ```
 
-The smoke test creates a room, loads its `/room/ROOMCODE` URL, joins from a second simulated player, reconnects the host, and starts the draft.
+The smoke test creates a room, loads its `/room/ROOMCODE` URL, joins from a second simulated player, reconnects the host, starts the draft, then creates a solo CPU room and auto-completes that draft.
 
 ## What Is Included
 
 - Host creates a room code.
 - Other players join by code or shared `/room/ROOMCODE` link.
+- Playable modes: Solo vs CPU, Online 1v1, and 2-4 player Tournament.
 - Host controls lobby settings.
+- Solo vs CPU rooms need only the host; the server drafts the CPU XI automatically from the same legal player pool.
 - Server owns the draft state, draw state, fixtures, and match simulation.
-- Server validates every spin, skip, pick, slot, speed, and skip-to-end request.
+- Server validates every spin, skip, pick, slot, auto-draft, speed, reset, and skip-to-end request.
 - Clients receive personalized `room:update` snapshots.
 - Browsers store a private per-room reconnect key so refreshes and short disconnects can reclaim the same player seat.
 - Player data loads from `data/players.json` when present, or from the compact `data/players.json.gz.b64` file included in this repo.

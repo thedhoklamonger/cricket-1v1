@@ -21,9 +21,11 @@ const CLIENT_EVENTS = {
   START_GAME: "game:start",
   DRAFT_SPIN: "draft:spin",
   DRAFT_PICK: "draft:pick",
+  DRAFT_AUTO: "draft:auto",
   MATCH_START_NEXT: "match:startNext",
   MATCH_SET_SPEED: "match:setSpeed",
   MATCH_SKIP_TO_END: "match:skipToEnd",
+  MATCH_RESET: "match:reset",
   SNAPSHOT: "room:snapshot"
 };
 
@@ -36,6 +38,7 @@ const { DB, NATIONS, DECADES } = loadDatabase();
 const CARD_BY_ID = new Map(DB.map((card) => [card.id, card]));
 const rooms = loadRooms();
 const timers = new Map();
+const cpuDraftTimers = new Map();
 
 const app = express();
 const server = http.createServer(app);
@@ -63,9 +66,11 @@ io.on("connection", (socket) => {
   socket.on(CLIENT_EVENTS.START_GAME, (payload = {}, ack) => startGame(socket, ack));
   socket.on(CLIENT_EVENTS.DRAFT_SPIN, (payload = {}, ack) => spinDraft(socket, payload, ack));
   socket.on(CLIENT_EVENTS.DRAFT_PICK, (payload = {}, ack) => pickDraftCard(socket, payload, ack));
+  socket.on(CLIENT_EVENTS.DRAFT_AUTO, (payload = {}, ack) => autoDraftRemaining(socket, ack));
   socket.on(CLIENT_EVENTS.MATCH_START_NEXT, (payload = {}, ack) => startNextMatch(socket, ack));
   socket.on(CLIENT_EVENTS.MATCH_SET_SPEED, (payload = {}, ack) => setMatchSpeed(socket, payload, ack));
   socket.on(CLIENT_EVENTS.MATCH_SKIP_TO_END, (payload = {}, ack) => skipMatchToEnd(socket, ack));
+  socket.on(CLIENT_EVENTS.MATCH_RESET, (payload = {}, ack) => resetMatches(socket, ack));
   socket.on(CLIENT_EVENTS.SNAPSHOT, (payload = {}, ack) => sendSnapshot(socket, ack));
   socket.on("disconnect", () => markDisconnected(socket));
 });
@@ -132,6 +137,7 @@ function loadRooms() {
 function restoreRoom(room) {
   const restored = {
     ...room,
+    settings: sanitizeSettings(room.settings || {}),
     players: (room.players || []).map((player) => ({
       ...player,
       joinKey: player.joinKey || makeId("key"),
@@ -246,11 +252,12 @@ function joinRoom(socket, payload, ack) {
     room.status = `${existingPlayer.name} rejoined the room.`;
     reply(ack, { roomId, playerId: existingPlayer.id, playerKey: existingPlayer.joinKey });
     emitRoom(room);
+    scheduleCpuDraft(room);
     return;
   }
 
   if (room.phase !== "lobby") return fail(socket, ack, "This room has already started. Rejoin with your original player name.");
-  if (room.players.length >= room.settings.teamCount) return fail(socket, ack, "This room is full.");
+  if (room.players.length >= humanCapacity(room.settings)) return fail(socket, ack, "This room is full.");
 
   const playerId = makeId("p");
   const joinKey = makeId("key");
@@ -269,6 +276,7 @@ function joinRoom(socket, payload, ack) {
   room.status = `${player.name} joined the room.`;
   reply(ack, { roomId, playerId, playerKey: joinKey });
   emitRoom(room);
+  scheduleCpuDraft(room);
 }
 
 function updateSettings(socket, payload, ack) {
@@ -276,7 +284,11 @@ function updateSettings(socket, payload, ack) {
   if (!room) return fail(socket, ack, "Join or create a room first.");
   if (!isHost(room, socket.data.playerId)) return fail(socket, ack, "Only the host can change settings.");
   if (room.phase !== "lobby") return fail(socket, ack, "Settings are locked after the draft starts.");
-  room.settings = sanitizeSettings({ ...room.settings, ...(payload.settings || {}) });
+  const nextSettings = sanitizeSettings({ ...room.settings, ...(payload.settings || {}) });
+  if (room.players.length > humanCapacity(nextSettings)) {
+    return fail(socket, ack, "Too many players are already in this room for that mode.");
+  }
+  room.settings = nextSettings;
   room.status = "Room settings updated.";
   reply(ack, {});
   emitRoom(room);
@@ -287,17 +299,25 @@ function startGame(socket, ack) {
   if (!room) return fail(socket, ack, "Join or create a room first.");
   if (!isHost(room, socket.data.playerId)) return fail(socket, ack, "Only the host can start the draft.");
   if (room.phase !== "lobby") return fail(socket, ack, "The game has already started.");
+  clearCpuDraftTimer(room);
+  stopRoomTimer(room);
   const activePlayers = room.players.filter((player) => player.connected || player.socketId);
-  if (activePlayers.length < 2) return fail(socket, ack, "At least two players are needed.");
-  if (activePlayers.length < room.settings.teamCount) return fail(socket, ack, `Need ${room.settings.teamCount} players for this room.`);
+  const requiredHumans = requiredHumanPlayers(room.settings);
+  if (activePlayers.length < requiredHumans) {
+    return fail(socket, ack, `Need ${requiredHumans} player${requiredHumans === 1 ? "" : "s"} for this room.`);
+  }
 
-  room.managers = activePlayers.slice(0, room.settings.teamCount).map((player, index) => ({
-    id: `team-${index}`,
-    name: player.name,
-    playerId: player.id,
-    xi: Array(11).fill(null),
-    skipsLeft: SKIPS_PER_TEAM
-  }));
+  if (room.settings.gameMode === "cpu") {
+    const player = activePlayers[0];
+    room.managers = [
+      createManager(0, player.name, player.id, false),
+      createManager(1, "CPU XI", null, true)
+    ];
+  } else {
+    room.managers = activePlayers.slice(0, room.settings.teamCount).map((player, index) =>
+      createManager(index, player.name, player.id, false)
+    );
+  }
   room.pickOrder = buildPickOrder(room.managers.length, 11);
   room.currentPick = 0;
   room.draw = null;
@@ -308,6 +328,7 @@ function startGame(socket, ack) {
   room.status = `${activeManager(room).name} starts the snake draft.`;
   reply(ack, {});
   emitRoom(room);
+  scheduleCpuDraft(room);
 }
 
 function spinDraft(socket, payload, ack) {
@@ -339,7 +360,6 @@ function pickDraftCard(socket, payload, ack) {
   if (!isActivePlayer(room, socket.data.playerId)) return fail(socket, ack, "It is not your turn.");
   if (!room.draw) return fail(socket, ack, "Spin a country and decade first.");
   const teamIndex = activeTeamIndex(room);
-  const manager = activeManager(room);
   const card = CARD_BY_ID.get(String(payload.cardId || ""));
   const slot = Number(payload.slot);
   if (!card) return fail(socket, ack, "Card not found.");
@@ -347,24 +367,21 @@ function pickDraftCard(socket, payload, ack) {
   if (takenByTeam(room, card)) return fail(socket, ack, `${card.baseName} has already been drafted.`);
   if (!Number.isInteger(slot) || !playableSlotsFor(room, card, teamIndex).includes(slot)) return fail(socket, ack, "That batting slot is not legal.");
 
-  manager.xi[slot - 1] = card.id;
-  room.draftLog.unshift({
-    pick: room.currentPick + 1,
-    team: manager.name,
-    player: card.baseName,
-    slot,
-    draw: `${room.draw.nation}, ${room.draw.decade}`
-  });
-  room.currentPick++;
-  room.draw = null;
-  if (draftComplete(room)) {
-    room.phase = "matches";
-    buildFixtures(room);
-    room.status = "Draft complete. Matches are ready.";
-  } else {
-    room.status = `${activeManager(room).name} is on the clock.`;
-  }
+  applyDraftPick(room, teamIndex, card, slot, `${room.draw.nation}, ${room.draw.decade}`);
   reply(ack, {});
+  emitRoom(room);
+  scheduleCpuDraft(room);
+}
+
+function autoDraftRemaining(socket, ack) {
+  const room = getSocketRoom(socket);
+  if (!room) return fail(socket, ack, "Join or create a room first.");
+  if (!isHost(room, socket.data.playerId)) return fail(socket, ack, "Only the host can auto draft.");
+  if (room.phase !== "draft") return fail(socket, ack, "The draft is not active.");
+  const picks = autoDraftRoom(room);
+  if (!picks) return fail(socket, ack, "No legal auto draft pick was found.");
+  room.status = draftComplete(room) ? "Draft complete. Matches are ready." : `Auto drafted ${picks} pick${picks === 1 ? "" : "s"}.`;
+  reply(ack, { picks });
   emitRoom(room);
 }
 
@@ -415,6 +432,18 @@ function skipMatchToEnd(socket, ack) {
   emitRoom(room);
 }
 
+function resetMatches(socket, ack) {
+  const room = getSocketRoom(socket);
+  if (!room) return fail(socket, ack, "Join or create a room first.");
+  if (!isHost(room, socket.data.playerId)) return fail(socket, ack, "Only the host can reset results.");
+  if (room.phase !== "matches") return fail(socket, ack, "Complete the draft first.");
+  stopRoomTimer(room);
+  buildFixtures(room);
+  room.status = "Match results reset.";
+  reply(ack, {});
+  emitRoom(room);
+}
+
 function sendSnapshot(socket, ack) {
   const room = getSocketRoom(socket);
   if (!room) return fail(socket, ack, "Join or create a room first.");
@@ -438,7 +467,7 @@ function buildFixtures(room) {
   stopRoomTimer(room);
   room.matches = [];
   room.runningMatchId = null;
-  if (room.settings.mode !== "tournament" || room.managers.length <= 2) {
+  if (room.settings.gameMode !== "tournament") {
     for (let index = 1; index <= room.settings.seriesMatches; index++) {
       room.matches.push({
         id: `match-${index}`,
@@ -452,6 +481,10 @@ function buildFixtures(room) {
     }
     return;
   }
+  if (room.managers.length === 2) {
+    room.matches.push({ id: "final-1", stage: "Final", a: 0, b: 1, status: "pending", result: null, live: null });
+    return;
+  }
   let id = 1;
   for (let a = 0; a < room.managers.length; a++) {
     for (let b = a + 1; b < room.managers.length; b++) {
@@ -461,12 +494,92 @@ function buildFixtures(room) {
 }
 
 function maybeCreateFinal(room) {
-  if (room.settings.mode !== "tournament" || room.managers.length <= 2 || !room.matches.length) return;
+  if (room.settings.gameMode !== "tournament" || room.managers.length <= 2 || !room.matches.length) return;
   const hasFinal = room.matches.some((match) => match.stage === "Final");
   const league = room.matches.filter((match) => match.stage === "League");
   if (hasFinal || league.some((match) => match.status !== "complete")) return;
   const top = standings(room).slice(0, 2);
   room.matches.push({ id: "final", stage: "Final", a: top[0].index, b: top[1].index, status: "pending", result: null, live: null });
+}
+
+function scheduleCpuDraft(room) {
+  clearCpuDraftTimer(room);
+  if (room.phase !== "draft" || !activeManager(room)?.cpu) return;
+  const timer = setTimeout(() => {
+    cpuDraftTimers.delete(room.id);
+    cpuPickTurn(room);
+  }, 650);
+  cpuDraftTimers.set(room.id, timer);
+}
+
+function clearCpuDraftTimer(room) {
+  const timer = cpuDraftTimers.get(room.id);
+  if (timer) clearTimeout(timer);
+  cpuDraftTimers.delete(room.id);
+}
+
+function cpuPickTurn(room) {
+  if (room.phase !== "draft") return;
+  const teamIndex = activeTeamIndex(room);
+  const manager = activeManager(room);
+  if (!manager?.cpu || teamIndex == null) return;
+  const pair = randomValidPair(room, teamIndex);
+  if (!pair) {
+    room.status = `${manager.name} could not find an eligible draw.`;
+    emitRoom(room);
+    return;
+  }
+  room.draw = pair;
+  const pick = bestDraftPick(room, teamIndex, cardsForDraw(pair));
+  if (!pick) {
+    room.status = `${manager.name} could not find a legal pick.`;
+    emitRoom(room);
+    return;
+  }
+  applyDraftPick(room, teamIndex, pick.card, pick.slot, `${pair.nation}, ${pair.decade}`);
+  emitRoom(room);
+  scheduleCpuDraft(room);
+}
+
+function autoDraftRoom(room) {
+  clearCpuDraftTimer(room);
+  let picks = 0;
+  let guard = 0;
+  while (room.phase === "draft" && guard < 120) {
+    guard++;
+    const teamIndex = activeTeamIndex(room);
+    if (teamIndex == null) break;
+    const pair = randomValidPair(room, teamIndex);
+    if (!pair) break;
+    room.draw = pair;
+    const pick = bestDraftPick(room, teamIndex, cardsForDraw(pair));
+    if (!pick) break;
+    applyDraftPick(room, teamIndex, pick.card, pick.slot, `${pair.nation}, ${pair.decade}`);
+    picks++;
+  }
+  return picks;
+}
+
+function applyDraftPick(room, teamIndex, card, slot, drawLabel) {
+  const manager = room.managers[teamIndex];
+  manager.xi[slot - 1] = card.id;
+  room.draftLog.unshift({
+    pick: room.currentPick + 1,
+    team: manager.name,
+    player: card.baseName,
+    slot,
+    draw: drawLabel
+  });
+  room.currentPick++;
+  room.draw = null;
+  if (draftComplete(room)) {
+    clearCpuDraftTimer(room);
+    room.phase = "matches";
+    buildFixtures(room);
+    room.status = "Draft complete. Matches are ready.";
+  } else {
+    room.status = `${activeManager(room).name} is on the clock.`;
+  }
 }
 
 function startLiveMatch(room, match) {
@@ -774,6 +887,8 @@ function publicRoom(room, viewerPlayerId) {
     phase: room.phase,
     status: room.status,
     settings: room.settings,
+    requiredHumans: requiredHumanPlayers(room.settings),
+    humanCapacity: humanCapacity(room.settings),
     simSpeed: room.simSpeed,
     players: room.players.map((player) => ({
       id: player.id,
@@ -790,6 +905,8 @@ function publicRoom(room, viewerPlayerId) {
     draft: {
       activeTeamIndex: activeIndex,
       activeTeamName: activeManager(room)?.name || "",
+      isCpuTurn: Boolean(activeManager(room)?.cpu),
+      round: activeIndex == null ? 0 : Math.floor(room.currentPick / Math.max(1, room.managers.length)) + 1,
       currentPick: room.currentPick,
       totalPicks: room.pickOrder.length,
       draw: room.draw,
@@ -798,6 +915,7 @@ function publicRoom(room, viewerPlayerId) {
     teams: room.managers.map((manager, index) => ({
       name: manager.name,
       playerId: manager.playerId,
+      cpu: Boolean(manager.cpu),
       skipsLeft: manager.skipsLeft,
       balance: teamBalance(room, index),
       xi: manager.xi.map((id, slotIndex) => {
@@ -1006,6 +1124,44 @@ function randomValidPair(room, teamIndex) {
   return pairs.length ? pairs[Math.floor(Math.random() * pairs.length)] : null;
 }
 
+function cardsForDraw(pair) {
+  return DB.filter((card) => card.nation === pair.nation && card.decade === pair.decade);
+}
+
+function bestDraftPick(room, teamIndex, candidates) {
+  const options = [];
+  candidates.forEach((card) => {
+    if (takenByTeam(room, card)) return;
+    playableSlotsFor(room, card, teamIndex).forEach((slot) => {
+      options.push({ card, slot, value: draftValue(room, card, slot, teamIndex) });
+    });
+  });
+  options.sort((a, b) => b.value - a.value);
+  return weightedPick(options.slice(0, Math.min(5, options.length)));
+}
+
+function weightedPick(options) {
+  if (!options.length) return null;
+  const weights = options.map((_, index) => Math.max(1, 8 - index * 1.4));
+  const total = weights.reduce((sum, item) => sum + item, 0);
+  let roll = Math.random() * total;
+  for (let index = 0; index < options.length; index++) {
+    roll -= weights[index];
+    if (roll <= 0) return options[index];
+  }
+  return options[0];
+}
+
+function draftValue(room, card, slot, teamIndex) {
+  const teamHasKeeper = hasWicketkeeper(room, teamIndex);
+  const topOrderBoost = slot <= 4 ? card.batSkill * 0.42 + card.batPower * 0.34 : 0;
+  const lowerBoost = slot >= 7 ? card.bowlSkill * 0.62 + card.bowlVariation * 0.34 : 0;
+  const finishBoost = slot >= 5 && slot <= 7 ? card.batPower * 0.46 + card.bowlSkill * 0.24 : 0;
+  const keeperBoost = card.keeper && !teamHasKeeper ? 16 : 0;
+  const scarcity = card.bowlSkill >= 78 && !selectedCards(room, teamIndex).some((item) => item.bowlType === card.bowlType && item.bowlSkill >= 70) ? 7 : 0;
+  return cardOverall(card) + topOrderBoost + lowerBoost + finishBoost + keeperBoost + scarcity + Math.random() * 6;
+}
+
 function standings(room) {
   const rows = room.managers.map((team, index) => ({ index, team, p: 0, w: 0, l: 0, t: 0, pts: 0, nrr: 0 }));
   room.matches.filter((match) => match.status === "complete" && match.stage !== "Final").forEach((match) => {
@@ -1046,6 +1202,17 @@ function buildPickOrder(teamCount, rounds) {
     order.push(...(round % 2 === 0 ? forward : reverse));
   }
   return order;
+}
+
+function createManager(index, name, playerId, cpu) {
+  return {
+    id: `team-${index}`,
+    name,
+    playerId,
+    cpu,
+    xi: Array(11).fill(null),
+    skipsLeft: SKIPS_PER_TEAM
+  };
 }
 
 function teamBalance(room, teamIndex) {
@@ -1126,14 +1293,31 @@ function randomNormal() {
 }
 
 function sanitizeSettings(input = {}) {
-  const teamCount = clamp(Math.round(Number(input.teamCount) || 2), 2, 4);
-  const mode = input.mode === "tournament" && teamCount > 2 ? "tournament" : "series";
+  const requestedMode = String(input.gameMode || input.mode || "").toLowerCase();
+  const gameMode = ["cpu", "duel", "tournament"].includes(requestedMode)
+    ? requestedMode
+    : requestedMode === "tournament"
+      ? "tournament"
+      : "duel";
+  const teamCount = gameMode === "tournament" ? clamp(Math.round(Number(input.teamCount) || 4), 2, 4) : 2;
   return {
-    mode,
+    gameMode,
+    mode: gameMode === "tournament" ? "tournament" : "series",
     teamCount,
     overs: [5, 10, 20].includes(Number(input.overs)) ? Number(input.overs) : 5,
     seriesMatches: clamp(Math.round(Number(input.seriesMatches) || 1), 1, 9)
   };
+}
+
+function requiredHumanPlayers(settings = {}) {
+  if (settings.gameMode === "cpu") return 1;
+  return humanCapacity(settings);
+}
+
+function humanCapacity(settings = {}) {
+  if (settings.gameMode === "cpu") return 1;
+  if (settings.gameMode === "tournament") return clamp(Math.round(Number(settings.teamCount) || 4), 2, 4);
+  return 2;
 }
 
 function cleanName(value, fallback) {

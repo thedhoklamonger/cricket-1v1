@@ -27,10 +27,7 @@
     body {
       margin: 0;
       color: var(--ink);
-      background:
-        radial-gradient(circle at 8% 0%, rgba(39, 122, 78, .18), transparent 28rem),
-        radial-gradient(circle at 96% 8%, rgba(35, 79, 124, .14), transparent 24rem),
-        linear-gradient(180deg, #f7faf7, var(--bg));
+      background: linear-gradient(180deg, #f7faf7 0%, #eef4ef 48%, #e7f0ea 100%);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
@@ -100,6 +97,33 @@
     }
     .form-grid { display: grid; gap: 10px; margin-top: 12px; }
     .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .mode-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .mode-card {
+      min-height: 92px;
+      align-content: start;
+      text-align: left;
+      white-space: normal;
+      background: var(--panel-2);
+    }
+    .mode-card strong {
+      display: block;
+      margin-bottom: 4px;
+      line-height: 1.15;
+    }
+    .mode-card.active {
+      border-color: rgba(39, 122, 78, .62);
+      background: var(--green-2);
+      box-shadow: inset 0 0 0 1px rgba(39, 122, 78, .24);
+    }
+    .start-draft {
+      min-height: 52px;
+      font-weight: 800;
+      font-size: 16px;
+    }
     .invite-banner {
       border: 1px solid rgba(35, 79, 124, .22);
       border-radius: 8px;
@@ -200,6 +224,37 @@
       line-height: .95;
       font-weight: 900;
     }
+    .draft-actions, .match-actions, .speed-control {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .match-actions {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) auto auto auto;
+      width: min(620px, 100%);
+    }
+    .match-actions .match-start {
+      min-height: 54px;
+      padding: 10px 18px;
+      font-weight: 900;
+      white-space: normal;
+      line-height: 1.15;
+    }
+    .speed-control button.active {
+      color: #fff;
+      background: var(--blue);
+      border-color: var(--blue);
+    }
+    .draft-log {
+      display: grid;
+      gap: 6px;
+      max-height: 190px;
+      overflow: auto;
+      margin-top: 10px;
+    }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { border-bottom: 1px solid var(--line); padding: 7px 5px; text-align: left; vertical-align: top; }
     th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
@@ -207,8 +262,10 @@
     .hidden { display: none !important; }
 
     @media (max-width: 900px) {
-      .topbar, .grid, .two, .score-hero { grid-template-columns: 1fr; }
+      .topbar, .grid, .two, .mode-grid, .score-hero, .match-actions { grid-template-columns: 1fr; }
       .slot-grid { grid-template-columns: repeat(11, 86px); }
+      .draft-actions, .match-actions, .speed-control { justify-content: stretch; }
+      .draft-actions button, .match-actions button, .speed-control button { width: 100%; }
     }
   </style>
 </head>
@@ -251,8 +308,25 @@
           <div class="room-code" id="roomCode">------</div>
           <div class="small" id="shareText"></div>
           <div class="form-grid" id="settingsPanel">
+            <div>
+              <span class="small">Game mode</span>
+              <div class="mode-grid" id="modeControls">
+                <button type="button" class="mode-card active" data-game-mode="cpu">
+                  <strong>Solo vs CPU</strong>
+                  <span class="small">One player drafts against an automatic opponent.</span>
+                </button>
+                <button type="button" class="mode-card" data-game-mode="duel">
+                  <strong>Online 1v1</strong>
+                  <span class="small">Two people use the shared link and alternate picks.</span>
+                </button>
+                <button type="button" class="mode-card" data-game-mode="tournament">
+                  <strong>Tournament</strong>
+                  <span class="small">Two to four people play a head-to-head league and final.</span>
+                </button>
+              </div>
+            </div>
             <div class="two">
-              <label>
+              <label id="teamCountBlock">
                 <span class="small">Players</span>
                 <select id="teamCountSelect" class="input">
                   <option value="2">2</option>
@@ -269,20 +343,12 @@
                 </select>
               </label>
             </div>
-            <div class="two">
-              <label>
-                <span class="small">Mode</span>
-                <select id="modeSelect" class="input">
-                  <option value="series">Series</option>
-                  <option value="tournament">Tournament</option>
-                </select>
-              </label>
-              <label>
-                <span class="small">Series matches</span>
-                <input id="seriesMatchesInput" class="input" type="number" min="1" max="9" value="1">
-              </label>
-            </div>
-            <button class="primary" id="startGameBtn">Start Draft</button>
+            <label id="seriesMatchesBlock">
+              <span class="small">Series matches</span>
+              <input id="seriesMatchesInput" class="input" type="number" min="1" max="9" value="1">
+            </label>
+            <button class="primary start-draft" id="startGameBtn">Start Draft</button>
+            <div class="small" id="startHelp"></div>
           </div>
           <div class="list" id="playersList"></div>
         </div>
@@ -295,9 +361,10 @@
               <strong>Draft</strong>
               <div class="small" id="draftHint">Waiting for a room.</div>
             </div>
-            <div>
+            <div class="draft-actions">
               <button class="primary" id="spinBtn">Spin Draw</button>
               <button id="skipBtn">Skip Draw</button>
+              <button class="warn" id="autoDraftBtn">Auto Remaining</button>
             </div>
           </div>
           <div class="list">
@@ -307,6 +374,7 @@
             </div>
           </div>
           <div class="card-grid" id="poolGrid"></div>
+          <div class="draft-log" id="draftLog"></div>
           <div class="team-grid" id="teamsGrid"></div>
         </section>
 
@@ -316,12 +384,15 @@
               <strong>Matches</strong>
               <div class="small" id="matchHint">Complete the draft first.</div>
             </div>
-            <div>
-              <button class="primary" id="startNextMatchBtn">Start Next Match</button>
-              <button data-speed="1">1x</button>
-              <button data-speed="2">2x</button>
-              <button data-speed="4">4x</button>
+            <div class="match-actions">
+              <button class="primary match-start" id="startNextMatchBtn">Start Next Match</button>
+              <div class="speed-control">
+                <button data-speed="1">1x</button>
+                <button data-speed="2">2x</button>
+                <button data-speed="4">4x</button>
+              </div>
               <button class="dark" id="skipEndBtn">Skip to End</button>
+              <button id="resetResultsBtn">Reset Results</button>
             </div>
           </div>
           <div class="match-grid" id="fixturesGrid"></div>
@@ -341,9 +412,11 @@
       START_GAME: "game:start",
       DRAFT_SPIN: "draft:spin",
       DRAFT_PICK: "draft:pick",
+      DRAFT_AUTO: "draft:auto",
       MATCH_START_NEXT: "match:startNext",
       MATCH_SET_SPEED: "match:setSpeed",
       MATCH_SKIP_TO_END: "match:skipToEnd",
+      MATCH_RESET: "match:reset",
       SNAPSHOT: "room:snapshot",
       UPDATE: "room:update",
       ERROR: "room:error"
@@ -406,8 +479,10 @@
     $("startGameBtn").onclick = () => emit(EVENTS.START_GAME);
     $("spinBtn").onclick = () => emit(EVENTS.DRAFT_SPIN, { skip: false });
     $("skipBtn").onclick = () => emit(EVENTS.DRAFT_SPIN, { skip: true });
+    $("autoDraftBtn").onclick = () => emit(EVENTS.DRAFT_AUTO);
     $("startNextMatchBtn").onclick = () => emit(EVENTS.MATCH_START_NEXT);
     $("skipEndBtn").onclick = () => emit(EVENTS.MATCH_SKIP_TO_END);
+    $("resetResultsBtn").onclick = () => emit(EVENTS.MATCH_RESET);
     $("copyLinkBtn").onclick = async () => {
       if (!room) return;
       const link = roomUrl(room.id);
@@ -419,8 +494,15 @@
     document.querySelectorAll("[data-speed]").forEach((button) => {
       button.onclick = () => emit(EVENTS.MATCH_SET_SPEED, { speed: Number(button.dataset.speed) });
     });
-    ["teamCountSelect", "oversSelect", "modeSelect", "seriesMatchesInput"].forEach((id) => {
+    ["teamCountSelect", "oversSelect", "seriesMatchesInput"].forEach((id) => {
       $(id).onchange = () => {
+        if (!room?.viewer.isHost || room.phase !== "lobby") return;
+        emit(EVENTS.UPDATE_SETTINGS, { settings: readSettings() });
+      };
+    });
+    document.querySelectorAll("[data-game-mode]").forEach((button) => {
+      button.onclick = () => {
+        setGameMode(button.dataset.gameMode);
         if (!room?.viewer.isHost || room.phase !== "lobby") return;
         emit(EVENTS.UPDATE_SETTINGS, { settings: readSettings() });
       };
@@ -541,12 +623,35 @@
 
     function readSettings() {
       const teamCount = Number($("teamCountSelect").value || 2);
+      const gameMode = currentGameMode();
       return {
         teamCount,
         overs: Number($("oversSelect").value || 5),
-        mode: $("modeSelect").value,
+        gameMode,
+        mode: gameMode === "tournament" ? "tournament" : "series",
         seriesMatches: Number($("seriesMatchesInput").value || 1)
       };
+    }
+
+    function currentGameMode() {
+      return document.querySelector("[data-game-mode].active")?.dataset.gameMode || "cpu";
+    }
+
+    function setGameMode(gameMode) {
+      const mode = ["cpu", "duel", "tournament"].includes(gameMode) ? gameMode : "cpu";
+      document.querySelectorAll("[data-game-mode]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.gameMode === mode);
+      });
+      const tournament = mode === "tournament";
+      $("teamCountBlock").classList.toggle("hidden", !tournament);
+      $("seriesMatchesBlock").classList.toggle("hidden", tournament);
+      if (!tournament) $("teamCountSelect").value = "2";
+    }
+
+    function modeLabel(gameMode) {
+      if (gameMode === "cpu") return "Solo vs CPU";
+      if (gameMode === "duel") return "Online 1v1";
+      return "Tournament";
     }
 
     function render() {
@@ -580,21 +685,32 @@
       if (!joined) return;
       $("roomCode").textContent = room.id;
       $("shareText").textContent = `Share this link: ${roomUrl(room.id)}`;
+      const cpuSeat = room.settings.gameMode === "cpu" ? `<div class="row">
+        <strong>CPU XI</strong>
+        <span class="pill good">Ready</span>
+        <span class="pill warn">CPU</span>
+      </div>` : "";
       $("playersList").innerHTML = room.players.map((player) => `<div class="row">
         <strong>${escapeHtml(player.name)}</strong>
         <span class="pill ${player.connected ? "good" : "loss"}">${player.connected ? "Online" : "Offline"}</span>
         ${player.host ? `<span class="pill warn">Host</span>` : ""}
-      </div>`).join("");
+      </div>`).join("") + cpuSeat;
       $("settingsPanel").classList.toggle("hidden", !room.viewer.isHost || room.phase !== "lobby");
       $("teamCountSelect").value = room.settings.teamCount;
       $("oversSelect").value = room.settings.overs;
-      $("modeSelect").value = room.settings.mode;
       $("seriesMatchesInput").value = room.settings.seriesMatches;
+      setGameMode(room.settings.gameMode || (room.settings.mode === "tournament" ? "tournament" : "duel"));
     }
 
     function renderLobby() {
       if (!room) return;
-      $("startGameBtn").disabled = !room.viewer.isHost || room.players.length < 2 || room.players.length < room.settings.teamCount;
+      const needed = room.requiredHumans || room.settings.teamCount;
+      const ready = room.players.filter((player) => player.connected).length >= needed;
+      $("startGameBtn").disabled = !room.viewer.isHost || !ready;
+      $("startGameBtn").textContent = ready ? "Start Draft" : `Waiting for ${needed} player${needed === 1 ? "" : "s"}`;
+      $("startHelp").textContent = room.viewer.isHost
+        ? `${modeLabel(room.settings.gameMode)} needs ${needed} human player${needed === 1 ? "" : "s"}.`
+        : "The host controls setup and starts the draft.";
     }
 
     function renderDraft() {
@@ -604,16 +720,28 @@
         $("drawText").textContent = "No draw";
         $("spinBtn").disabled = true;
         $("skipBtn").disabled = true;
+        $("autoDraftBtn").disabled = true;
         $("poolGrid").innerHTML = "";
+        $("draftLog").innerHTML = "";
         $("teamsGrid").innerHTML = "";
         return;
       }
-      $("draftHint").textContent = `${room.draft.currentPick}/${room.draft.totalPicks} picks`;
-      $("turnText").textContent = room.phase === "draft" ? `${room.draft.activeTeamName} is on the clock` : "Draft complete";
-      $("drawText").textContent = room.draft.draw ? `${room.draft.draw.nation}, ${room.draft.draw.decade}` : "No draw";
-      $("spinBtn").disabled = room.phase !== "draft" || !room.viewer.isActive || Boolean(room.draft.draw);
-      $("skipBtn").disabled = room.phase !== "draft" || !room.viewer.isActive || !room.draft.draw;
+      $("draftHint").textContent = `Round ${room.draft.round || 0} / ${room.draft.currentPick}/${room.draft.totalPicks} picks`;
+      $("turnText").textContent = room.phase === "draft"
+        ? `${room.draft.activeTeamName} ${room.draft.isCpuTurn ? "is picking" : "is on the clock"}`
+        : "Draft complete";
+      $("drawText").textContent = room.draft.draw
+        ? `${room.draft.draw.nation}, ${room.draft.draw.decade}`
+        : room.draft.isCpuTurn ? "CPU will draw automatically" : "No draw";
+      $("spinBtn").disabled = room.phase !== "draft" || !room.viewer.isActive || room.draft.isCpuTurn || Boolean(room.draft.draw);
+      $("skipBtn").disabled = room.phase !== "draft" || !room.viewer.isActive || room.draft.isCpuTurn || !room.draft.draw;
+      $("autoDraftBtn").disabled = room.phase !== "draft" || !room.viewer.isHost;
       $("poolGrid").innerHTML = room.phase === "draft" && room.draft.draw ? renderPool() : "";
+      const draftLog = room.draft.log || [];
+      $("draftLog").innerHTML = draftLog.length ? draftLog.map((item) => `<div class="row">
+        <strong>${escapeHtml(item.team)}</strong>
+        <span class="small">picked ${escapeHtml(item.player)} at No. ${item.slot} from ${escapeHtml(item.draw)}</span>
+      </div>`).join("") : "";
       $("teamsGrid").innerHTML = room.teams.map(renderTeam).join("");
     }
 
@@ -641,7 +769,10 @@
             <strong>${escapeHtml(team.name)}</strong>
             <div class="small">Bat ${team.balance.batting}, Bowl ${team.balance.bowling}, ${team.balance.attack}</div>
           </div>
-          <span class="pill ${team.balance.keeper ? "good" : "warn"}">${team.xi.filter(Boolean).length}/11</span>
+          <div>
+            <span class="pill ${team.cpu ? "warn" : "good"}">${team.cpu ? "CPU" : "Player"}</span>
+            <span class="pill ${team.balance.keeper ? "good" : "warn"}">${team.xi.filter(Boolean).length}/11</span>
+          </div>
         </div>
         <div class="slot-grid">
           ${team.xi.map((card, slotIndex) => `<div class="slot">
@@ -660,13 +791,21 @@
       const pending = ready && room.matches.some((match) => match.status === "pending");
       const running = ready && room.matches.some((match) => match.status === "running");
       $("startNextMatchBtn").disabled = !ready || !pending || running;
+      $("startNextMatchBtn").textContent = running ? "Match Running..." : nextMatchButtonText();
       $("skipEndBtn").disabled = !ready || (!pending && !running);
+      $("resetResultsBtn").disabled = !ready || running || !room.viewer.isHost || !room.matches.some((match) => match.status === "complete");
       document.querySelectorAll("[data-speed]").forEach((button) => {
-        button.classList.toggle("primary", room?.simSpeed === Number(button.dataset.speed));
+        button.classList.toggle("active", room?.simSpeed === Number(button.dataset.speed));
       });
       $("fixturesGrid").innerHTML = ready ? room.matches.map(renderFixture).join("") : "";
       $("standingsWrap").innerHTML = ready && room.standings.length ? renderStandings() : "";
       $("matchCentre").innerHTML = ready ? renderMatchCentre() : "";
+    }
+
+    function nextMatchButtonText() {
+      const match = room?.matches.find((item) => item.status === "pending");
+      if (!match) return "No Matches Left";
+      return match.stage === "Final" ? "Start Final" : "Start Next Match";
     }
 
     function renderFixture(match) {
