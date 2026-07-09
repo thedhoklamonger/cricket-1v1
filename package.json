@@ -1,0 +1,23 @@
+{
+  "name": "cricket-versus-online",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Socket.IO room server for Cricket Versus Draft.",
+  "main": "server.js",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node scripts/check-client.js",
+    "smoke": "node scripts/smoke-test.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
+  }
+}

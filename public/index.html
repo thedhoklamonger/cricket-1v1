@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cricket Versus Online</title>
+  <style>
+    :root {
+      --bg: #eef4ef;
+      --panel: #fff;
+      --panel-2: #f7faf7;
+      --ink: #16201a;
+      --muted: #627269;
+      --line: #d8e1dc;
+      --green: #277a4e;
+      --green-2: #dff1e6;
+      --blue: #234f7c;
+      --blue-2: #e3edf7;
+      --amber: #a46318;
+      --amber-2: #fff0d6;
+      --red: #ad3434;
+      --red-2: #ffe2dc;
+      --shadow: 0 18px 42px rgba(21, 33, 28, .12);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 8% 0%, rgba(39, 122, 78, .18), transparent 28rem),
+        radial-gradient(circle at 96% 8%, rgba(35, 79, 124, .14), transparent 24rem),
+        linear-gradient(180deg, #f7faf7, var(--bg));
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, input, select { font: inherit; }
+    button {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 12px;
+      background: var(--panel);
+      color: var(--ink);
+      cursor: pointer;
+    }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    button.primary { color: #fff; background: var(--green); border-color: var(--green); }
+    button.dark { color: #fff; background: var(--ink); border-color: var(--ink); }
+    button.warn { color: #fff; background: var(--amber); border-color: var(--amber); }
+
+    .app {
+      width: min(1500px, calc(100vw - 24px));
+      margin: 0 auto;
+      padding: 16px 0 28px;
+    }
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(320px, 1fr) auto;
+      gap: 16px;
+      align-items: end;
+      margin-bottom: 14px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 5vw, 62px);
+      line-height: .95;
+      letter-spacing: 0;
+    }
+    .tagline { margin: 8px 0 0; color: var(--muted); max-width: 760px; }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.94);
+      box-shadow: var(--shadow);
+      padding: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(340px, 430px) minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .small { color: var(--muted); font-size: 13px; line-height: 1.35; }
+    .input {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: #fff;
+      color: var(--ink);
+    }
+    .form-grid { display: grid; gap: 10px; margin-top: 12px; }
+    .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .invite-banner {
+      border: 1px solid rgba(35, 79, 124, .22);
+      border-radius: 8px;
+      padding: 10px;
+      background: var(--blue-2);
+      color: #183d64;
+    }
+    .invite-banner strong { display: block; margin-bottom: 2px; }
+    .invite-banner .small { color: #2c537a; }
+    .pill {
+      display: inline-flex;
+      min-height: 24px;
+      align-items: center;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel-2);
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .pill.good { color: #155b38; background: var(--green-2); border-color: rgba(39, 122, 78, .28); }
+    .pill.warn { color: #74420c; background: var(--amber-2); border-color: rgba(164, 99, 24, .28); }
+    .pill.loss { color: #8c2424; background: var(--red-2); border-color: rgba(173, 52, 52, .22); }
+    .status {
+      min-height: 42px;
+      border-left: 4px solid var(--green);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      background: var(--green-2);
+      color: #164d32;
+    }
+    .status.error { border-color: var(--red); color: #842424; background: var(--red-2); }
+    .room-code {
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: .08em;
+    }
+    .list { display: grid; gap: 8px; margin-top: 12px; }
+    .row {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      padding: 9px;
+    }
+    .team-grid, .card-grid, .match-grid {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .team-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .card-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .match-grid { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+    .team, .card, .match-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+    .card.disabled { opacity: .55; background: #f2f4f2; }
+    .slots {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .slot-grid {
+      display: grid;
+      grid-template-columns: repeat(11, minmax(78px, 1fr));
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .slot {
+      min-height: 72px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      padding: 7px;
+      font-size: 12px;
+    }
+    .slot strong {
+      display: block;
+      font-size: 13px;
+      line-height: 1.15;
+      word-break: break-word;
+    }
+    .score-hero {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .big-score {
+      font-size: clamp(34px, 5vw, 54px);
+      line-height: .95;
+      font-weight: 900;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 7px 5px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .hidden { display: none !important; }
+
+    @media (max-width: 900px) {
+      .topbar, .grid, .two, .score-hero { grid-template-columns: 1fr; }
+      .slot-grid { grid-template-columns: repeat(11, 86px); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <h1>Cricket Versus Online</h1>
+        <p class="tagline">Create a room, share the link, draft live, and simulate matches from one shared server state.</p>
+      </div>
+      <span class="pill" id="connectionPill">Connecting</span>
+    </header>
+
+    <div class="status" id="status">Create or join a room.</div>
+
+    <div class="grid">
+      <aside class="panel">
+        <div class="toolbar">
+          <div>
+            <strong>Room</strong>
+            <div class="small" id="roomHint">No room joined</div>
+          </div>
+          <button id="copyLinkBtn">Copy Link</button>
+        </div>
+
+        <div id="joinPanel" class="form-grid">
+          <div class="invite-banner hidden" id="inviteBanner">
+            <strong>Room invite</strong>
+            <div class="small" id="inviteText"></div>
+          </div>
+          <input id="playerNameInput" class="input" placeholder="Your name" value="Player">
+          <div class="two">
+            <button class="primary" id="createRoomBtn">Create Room</button>
+            <input id="roomCodeInput" class="input" placeholder="Room code">
+          </div>
+          <button id="joinRoomBtn">Join Room</button>
+        </div>
+
+        <div id="lobbyPanel" class="hidden">
+          <div class="room-code" id="roomCode">------</div>
+          <div class="small" id="shareText"></div>
+          <div class="form-grid" id="settingsPanel">
+            <div class="two">
+              <label>
+                <span class="small">Players</span>
+                <select id="teamCountSelect" class="input">
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                </select>
+              </label>
+              <label>
+                <span class="small">Overs</span>
+                <select id="oversSelect" class="input">
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                </select>
+              </label>
+            </div>
+            <div class="two">
+              <label>
+                <span class="small">Mode</span>
+                <select id="modeSelect" class="input">
+                  <option value="series">Series</option>
+                  <option value="tournament">Tournament</option>
+                </select>
+              </label>
+              <label>
+                <span class="small">Series matches</span>
+                <input id="seriesMatchesInput" class="input" type="number" min="1" max="9" value="1">
+              </label>
+            </div>
+            <button class="primary" id="startGameBtn">Start Draft</button>
+          </div>
+          <div class="list" id="playersList"></div>
+        </div>
+      </aside>
+
+      <section>
+        <section class="panel" id="draftPanel">
+          <div class="toolbar">
+            <div>
+              <strong>Draft</strong>
+              <div class="small" id="draftHint">Waiting for a room.</div>
+            </div>
+            <div>
+              <button class="primary" id="spinBtn">Spin Draw</button>
+              <button id="skipBtn">Skip Draw</button>
+            </div>
+          </div>
+          <div class="list">
+            <div class="row">
+              <strong id="turnText">No active draft</strong>
+              <div class="small" id="drawText">No draw</div>
+            </div>
+          </div>
+          <div class="card-grid" id="poolGrid"></div>
+          <div class="team-grid" id="teamsGrid"></div>
+        </section>
+
+        <section class="panel" id="matchesPanel" style="margin-top:16px">
+          <div class="toolbar">
+            <div>
+              <strong>Matches</strong>
+              <div class="small" id="matchHint">Complete the draft first.</div>
+            </div>
+            <div>
+              <button class="primary" id="startNextMatchBtn">Start Next Match</button>
+              <button data-speed="1">1x</button>
+              <button data-speed="2">2x</button>
+              <button data-speed="4">4x</button>
+              <button class="dark" id="skipEndBtn">Skip to End</button>
+            </div>
+          </div>
+          <div class="match-grid" id="fixturesGrid"></div>
+          <div id="standingsWrap" style="margin-top:12px; overflow:auto"></div>
+          <div id="matchCentre"></div>
+        </section>
+      </section>
+    </div>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const EVENTS = {
+      CREATE_ROOM: "room:create",
+      JOIN_ROOM: "room:join",
+      UPDATE_SETTINGS: "room:updateSettings",
+      START_GAME: "game:start",
+      DRAFT_SPIN: "draft:spin",
+      DRAFT_PICK: "draft:pick",
+      MATCH_START_NEXT: "match:startNext",
+      MATCH_SET_SPEED: "match:setSpeed",
+      MATCH_SKIP_TO_END: "match:skipToEnd",
+      SNAPSHOT: "room:snapshot",
+      UPDATE: "room:update",
+      ERROR: "room:error"
+    };
+
+    const socket = io();
+    let room = null;
+    let savedPlayerName = localStorage.getItem("cricketOnlineName") || "";
+    let lastError = "";
+    let joinAttemptInFlight = false;
+    let inviteAttempted = false;
+    const $ = (id) => document.getElementById(id);
+    const IDENTITY_PREFIX = "cricketOnlineIdentity:";
+    const initialRoomId = getRoomIdFromLocation();
+
+    if (initialRoomId) {
+      $("roomCodeInput").value = initialRoomId;
+      if (!savedPlayerName) {
+        savedPlayerName = makeGuestName();
+        localStorage.setItem("cricketOnlineName", savedPlayerName);
+      }
+    }
+    $("playerNameInput").value = savedPlayerName || "Player";
+
+    socket.on("connect", () => {
+      $("connectionPill").textContent = "Connected";
+      $("connectionPill").className = "pill good";
+      reconnectToKnownRoom();
+    });
+    socket.on("disconnect", () => {
+      $("connectionPill").textContent = "Disconnected";
+      $("connectionPill").className = "pill loss";
+    });
+    socket.on(EVENTS.UPDATE, (snapshot) => {
+      room = snapshot;
+      lastError = "";
+      render();
+    });
+    socket.on(EVENTS.ERROR, ({ message }) => {
+      lastError = message;
+      renderStatus();
+    });
+
+    $("createRoomBtn").onclick = async () => {
+      saveName();
+      const response = await emit(EVENTS.CREATE_ROOM, { playerName: savedPlayerName, settings: readSettings() });
+      rememberIdentity(response);
+      if (response?.roomId) setRoomUrl(response.roomId);
+    };
+    $("joinRoomBtn").onclick = async () => {
+      saveName();
+      const roomId = cleanRoomCode($("roomCodeInput").value);
+      $("roomCodeInput").value = roomId;
+      const response = await joinRoom(roomId, readIdentity(roomId), savedPlayerName);
+      if (response?.roomId) {
+        rememberIdentity(response);
+        setRoomUrl(response.roomId);
+      }
+    };
+    $("startGameBtn").onclick = () => emit(EVENTS.START_GAME);
+    $("spinBtn").onclick = () => emit(EVENTS.DRAFT_SPIN, { skip: false });
+    $("skipBtn").onclick = () => emit(EVENTS.DRAFT_SPIN, { skip: true });
+    $("startNextMatchBtn").onclick = () => emit(EVENTS.MATCH_START_NEXT);
+    $("skipEndBtn").onclick = () => emit(EVENTS.MATCH_SKIP_TO_END);
+    $("copyLinkBtn").onclick = async () => {
+      if (!room) return;
+      const link = roomUrl(room.id);
+      try {
+        if (navigator.clipboard) await navigator.clipboard.writeText(link);
+      } catch (error) {}
+      $("shareText").textContent = `Share this link: ${link}`;
+    };
+    document.querySelectorAll("[data-speed]").forEach((button) => {
+      button.onclick = () => emit(EVENTS.MATCH_SET_SPEED, { speed: Number(button.dataset.speed) });
+    });
+    ["teamCountSelect", "oversSelect", "modeSelect", "seriesMatchesInput"].forEach((id) => {
+      $(id).onchange = () => {
+        if (!room?.viewer.isHost || room.phase !== "lobby") return;
+        emit(EVENTS.UPDATE_SETTINGS, { settings: readSettings() });
+      };
+    });
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-card-id][data-slot]");
+      if (!button) return;
+      emit(EVENTS.DRAFT_PICK, { cardId: button.dataset.cardId, slot: Number(button.dataset.slot) });
+    });
+
+    render();
+
+    async function emit(eventName, payload = {}) {
+      return new Promise((resolve) => {
+        socket.emit(eventName, payload, (response = {}) => {
+          if (!response.ok) {
+            lastError = response.message || "Action failed.";
+            renderStatus();
+            resolve(null);
+            return;
+          }
+          resolve(response);
+        });
+      });
+    }
+
+    async function reconnectToKnownRoom() {
+      const invitedRoomId = getRoomIdFromLocation();
+      const targetRoomId = cleanRoomCode(room?.id || invitedRoomId);
+      if (!targetRoomId || joinAttemptInFlight) return;
+      const identity = readIdentity(targetRoomId);
+      if (!identity && !invitedRoomId && !room) return;
+      joinAttemptInFlight = true;
+      inviteAttempted = Boolean(invitedRoomId);
+      $("roomCodeInput").value = targetRoomId;
+      if (identity?.playerName) {
+        savedPlayerName = identity.playerName;
+        $("playerNameInput").value = savedPlayerName;
+        localStorage.setItem("cricketOnlineName", savedPlayerName);
+      } else {
+        saveName();
+      }
+      const response = await joinRoom(targetRoomId, identity, identity?.playerName || savedPlayerName);
+      joinAttemptInFlight = false;
+      if (response?.roomId) {
+        rememberIdentity(response);
+        setRoomUrl(response.roomId);
+      }
+    }
+
+    function joinRoom(roomId, identity = readIdentity(roomId), playerName = savedPlayerName) {
+      return emit(EVENTS.JOIN_ROOM, {
+        roomId,
+        playerName: playerName || identity?.playerName || savedPlayerName,
+        playerId: identity?.playerId,
+        playerKey: identity?.playerKey
+      });
+    }
+
+    function saveName() {
+      savedPlayerName = $("playerNameInput").value.trim() || "Player";
+      localStorage.setItem("cricketOnlineName", savedPlayerName);
+    }
+
+    function rememberIdentity(response) {
+      if (!response?.roomId || !response.playerId || !response.playerKey) return;
+      const identity = {
+        playerId: response.playerId,
+        playerKey: response.playerKey,
+        playerName: savedPlayerName
+      };
+      localStorage.setItem(identityKey(response.roomId), JSON.stringify(identity));
+    }
+
+    function readIdentity(roomId) {
+      try {
+        return JSON.parse(localStorage.getItem(identityKey(roomId)) || "null");
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function identityKey(roomId) {
+      return `${IDENTITY_PREFIX}${cleanRoomCode(roomId)}`;
+    }
+
+    function getRoomIdFromLocation() {
+      const pathParts = location.pathname.split("/").filter(Boolean);
+      const roomIndex = pathParts.findIndex((part) => part.toLowerCase() === "room");
+      const pathRoom = roomIndex >= 0 ? pathParts[roomIndex + 1] : "";
+      const queryRoom = new URLSearchParams(location.search).get("room");
+      const hashRoom = location.hash.length > 1 ? location.hash.slice(1) : "";
+      return cleanRoomCode(pathRoom || queryRoom || hashRoom);
+    }
+
+    function cleanRoomCode(value) {
+      return String(value || "").trim().replace(/[^a-z0-9]/gi, "").toUpperCase().slice(0, 12);
+    }
+
+    function makeGuestName() {
+      return `Guest ${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
+    function roomPath(roomId) {
+      return `/room/${encodeURIComponent(cleanRoomCode(roomId))}`;
+    }
+
+    function roomUrl(roomId) {
+      return new URL(roomPath(roomId), location.origin).href;
+    }
+
+    function setRoomUrl(roomId) {
+      const targetPath = roomPath(roomId);
+      if (location.pathname !== targetPath || location.search || location.hash) {
+        history.replaceState(null, "", targetPath);
+      }
+    }
+
+    function readSettings() {
+      const teamCount = Number($("teamCountSelect").value || 2);
+      return {
+        teamCount,
+        overs: Number($("oversSelect").value || 5),
+        mode: $("modeSelect").value,
+        seriesMatches: Number($("seriesMatchesInput").value || 1)
+      };
+    }
+
+    function render() {
+      renderStatus();
+      renderRoom();
+      renderLobby();
+      renderDraft();
+      renderMatches();
+    }
+
+    function renderStatus() {
+      const invitedRoomId = getRoomIdFromLocation();
+      const defaultStatus = invitedRoomId ? `Joining room ${invitedRoomId}...` : "Create or join a room.";
+      $("status").textContent = lastError || room?.status || defaultStatus;
+      $("status").className = `status ${lastError ? "error" : ""}`;
+    }
+
+    function renderRoom() {
+      const joined = Boolean(room);
+      const invitedRoomId = getRoomIdFromLocation();
+      $("joinPanel").classList.toggle("hidden", joined);
+      $("lobbyPanel").classList.toggle("hidden", !joined);
+      $("copyLinkBtn").disabled = !joined;
+      $("roomHint").textContent = joined ? `Room ${room.id}` : invitedRoomId ? `Invite ${invitedRoomId}` : "No room joined";
+      $("inviteBanner").classList.toggle("hidden", joined || !invitedRoomId);
+      if (invitedRoomId) {
+        $("inviteText").textContent = inviteAttempted
+          ? `Trying room ${invitedRoomId}. If you are not in yet, change your name and press Join Room.`
+          : `Opening room ${invitedRoomId}.`;
+      }
+      if (!joined) return;
+      $("roomCode").textContent = room.id;
+      $("shareText").textContent = `Share this link: ${roomUrl(room.id)}`;
+      $("playersList").innerHTML = room.players.map((player) => `<div class="row">
+        <strong>${escapeHtml(player.name)}</strong>
+        <span class="pill ${player.connected ? "good" : "loss"}">${player.connected ? "Online" : "Offline"}</span>
+        ${player.host ? `<span class="pill warn">Host</span>` : ""}
+      </div>`).join("");
+      $("settingsPanel").classList.toggle("hidden", !room.viewer.isHost || room.phase !== "lobby");
+      $("teamCountSelect").value = room.settings.teamCount;
+      $("oversSelect").value = room.settings.overs;
+      $("modeSelect").value = room.settings.mode;
+      $("seriesMatchesInput").value = room.settings.seriesMatches;
+    }
+
+    function renderLobby() {
+      if (!room) return;
+      $("startGameBtn").disabled = !room.viewer.isHost || room.players.length < 2 || room.players.length < room.settings.teamCount;
+    }
+
+    function renderDraft() {
+      if (!room || room.phase === "lobby") {
+        $("draftHint").textContent = "Waiting for the room to start.";
+        $("turnText").textContent = "No active draft";
+        $("drawText").textContent = "No draw";
+        $("spinBtn").disabled = true;
+        $("skipBtn").disabled = true;
+        $("poolGrid").innerHTML = "";
+        $("teamsGrid").innerHTML = "";
+        return;
+      }
+      $("draftHint").textContent = `${room.draft.currentPick}/${room.draft.totalPicks} picks`;
+      $("turnText").textContent = room.phase === "draft" ? `${room.draft.activeTeamName} is on the clock` : "Draft complete";
+      $("drawText").textContent = room.draft.draw ? `${room.draft.draw.nation}, ${room.draft.draw.decade}` : "No draw";
+      $("spinBtn").disabled = room.phase !== "draft" || !room.viewer.isActive || Boolean(room.draft.draw);
+      $("skipBtn").disabled = room.phase !== "draft" || !room.viewer.isActive || !room.draft.draw;
+      $("poolGrid").innerHTML = room.phase === "draft" && room.draft.draw ? renderPool() : "";
+      $("teamsGrid").innerHTML = room.teams.map(renderTeam).join("");
+    }
+
+    function renderPool() {
+      return room.pool.map((card) => `<article class="card ${card.disabled ? "disabled" : ""}">
+        <div class="toolbar">
+          <div>
+            <strong>${escapeHtml(card.baseName)}</strong>
+            <div class="small">${escapeHtml(card.nation)} / ${card.decade}</div>
+          </div>
+          <span class="pill">${card.rating}</span>
+        </div>
+        <div class="small">${escapeHtml(card.reason)}</div>
+        <div class="small">${card.type}${card.keeper ? " / WK" : ""} / Bat ${card.batSkill}-${card.batPower} / Bowl ${card.bowlSkill}-${card.bowlVariation}</div>
+        <div class="slots">
+          ${card.slots.map((slot) => `<button class="primary" data-card-id="${card.id}" data-slot="${slot}" ${!room.viewer.isActive ? "disabled" : ""}>No. ${slot}</button>`).join("")}
+        </div>
+      </article>`).join("");
+    }
+
+    function renderTeam(team, index) {
+      return `<article class="team">
+        <div class="toolbar">
+          <div>
+            <strong>${escapeHtml(team.name)}</strong>
+            <div class="small">Bat ${team.balance.batting}, Bowl ${team.balance.bowling}, ${team.balance.attack}</div>
+          </div>
+          <span class="pill ${team.balance.keeper ? "good" : "warn"}">${team.xi.filter(Boolean).length}/11</span>
+        </div>
+        <div class="slot-grid">
+          ${team.xi.map((card, slotIndex) => `<div class="slot">
+            <span class="small">No. ${slotIndex + 1}</span>
+            <strong>${card ? escapeHtml(card.baseName) : "Empty"}</strong>
+            <span class="small">${card ? `${escapeHtml(card.nation)}, ${card.decade}` : roleForSlot(slotIndex + 1)}</span>
+          </div>`).join("")}
+        </div>
+      </article>`;
+    }
+
+    function renderMatches() {
+      const ready = room?.phase === "matches";
+      $("matchesPanel").classList.toggle("hidden", !room || room.phase === "lobby");
+      $("matchHint").textContent = ready ? `${room.settings.overs} overs per innings` : "Complete the draft first.";
+      const pending = ready && room.matches.some((match) => match.status === "pending");
+      const running = ready && room.matches.some((match) => match.status === "running");
+      $("startNextMatchBtn").disabled = !ready || !pending || running;
+      $("skipEndBtn").disabled = !ready || (!pending && !running);
+      document.querySelectorAll("[data-speed]").forEach((button) => {
+        button.classList.toggle("primary", room?.simSpeed === Number(button.dataset.speed));
+      });
+      $("fixturesGrid").innerHTML = ready ? room.matches.map(renderFixture).join("") : "";
+      $("standingsWrap").innerHTML = ready && room.standings.length ? renderStandings() : "";
+      $("matchCentre").innerHTML = ready ? renderMatchCentre() : "";
+    }
+
+    function renderFixture(match) {
+      return `<article class="match-card">
+        <span class="pill ${match.status === "running" ? "warn" : match.status === "complete" ? "good" : ""}">${match.status}</span>
+        <strong>${escapeHtml(match.aName)} vs ${escapeHtml(match.bName)}</strong>
+        <div class="small">${escapeHtml(match.stage)} / ${escapeHtml(match.summary)}</div>
+      </article>`;
+    }
+
+    function renderStandings() {
+      return `<table><tr><th>Team</th><th class="num">P</th><th class="num">W</th><th class="num">L</th><th class="num">Pts</th><th class="num">NRR</th></tr>` +
+        room.standings.map((row) => `<tr>
+          <td>${escapeHtml(row.team.name)}</td>
+          <td class="num">${row.p}</td>
+          <td class="num">${row.w}</td>
+          <td class="num">${row.l}</td>
+          <td class="num">${row.pts}</td>
+          <td class="num">${row.nrr.toFixed(2)}</td>
+        </tr>`).join("") + `</table>`;
+    }
+
+    function renderMatchCentre() {
+      const match = [...room.matches].reverse().find((item) => item.status === "running" || item.status === "complete");
+      if (!match) return `<div class="row">No match started.</div>`;
+      const source = match.live || match.result;
+      const innings = source.innings || [];
+      return `<div class="score-hero">
+        ${innings.map((item) => `<div class="team">
+          <div class="small">${escapeHtml(item.battingName)}</div>
+          <div class="big-score">${item.runs}/${item.wickets}</div>
+          <div class="small">${oversText(item.legal)} overs</div>
+        </div>`).join("")}
+      </div>
+      <div class="row" style="margin-top:10px">${escapeHtml(match.summary)}</div>
+      <div class="team-grid">
+        ${innings.map(renderInnings).join("")}
+      </div>`;
+    }
+
+    function renderInnings(innings) {
+      return `<article class="team">
+        <strong>${escapeHtml(innings.battingName)} card</strong>
+        <div style="overflow:auto">
+          <table><tr><th>Batter</th><th class="num">R</th><th class="num">B</th><th class="num">4s</th><th class="num">6s</th></tr>
+          ${innings.bat.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td class="num">${row.r}</td><td class="num">${row.b}</td><td class="num">${row.fours}</td><td class="num">${row.sixes}</td></tr>`).join("")}
+          </table>
+        </div>
+        <div class="list">
+          ${innings.commentary.slice(-8).reverse().map((ball) => `<div class="row"><strong>${ball.label}</strong> ${escapeHtml(ball.text)}</div>`).join("")}
+        </div>
+      </article>`;
+    }
+
+    function roleForSlot(slot) {
+      if (slot <= 2) return "Opener";
+      if (slot <= 4) return "Top order";
+      if (slot <= 6) return "Middle order";
+      if (slot <= 8) return "All-rounder";
+      return "Bowler";
+    }
+
+    function oversText(balls) {
+      return `${Math.floor(balls / 6)}.${balls % 6}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[char]));
+    }
+  </script>
+</body>
+</html>
