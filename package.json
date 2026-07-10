@@ -4,7 +4,6 @@
   "private": true,
   "description": "Socket.IO room server for Cricket Versus Draft.",
   "main": "server.js",
-  "packageManager": "pnpm@11.7.0",
   "engines": {
     "node": ">=20"
   },
