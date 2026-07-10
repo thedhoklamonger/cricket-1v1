@@ -9,7 +9,6 @@ Upload the whole `cricket-1v1` repository:
 ```text
 server.js
 package.json
-pnpm-lock.yaml
 public/index.html
 data/players.json or data/players.json.gz.b64
 EVENTS.md
@@ -25,8 +24,8 @@ Use these settings on any Node hosting service:
 
 ```text
 Runtime: Node 20 or newer
-Build command: corepack enable && pnpm install --frozen-lockfile
-Start command: pnpm start
+Build command: npm install
+Start command: node server.js
 Health check path: /healthz
 Public port: provided by the host as PORT
 Instance count: 1
@@ -86,8 +85,8 @@ The link opens the website, joins the room, and keeps a private reconnect key in
 Run:
 
 ```powershell
-pnpm check
-pnpm smoke
+npm run check
+npm run smoke
 ```
 
 The smoke test starts a temporary server, creates a room, opens the room URL, joins as a second player, reconnects the host, starts the draft, then verifies a solo CPU room can auto-complete its draft.
