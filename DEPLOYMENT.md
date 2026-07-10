@@ -24,7 +24,7 @@ Use these settings on any Node hosting service:
 
 ```text
 Runtime: Node 20 or newer
-Build command: npm install
+Build command: corepack enable && yarn install
 Start command: node server.js
 Health check path: /healthz
 Public port: provided by the host as PORT
@@ -85,8 +85,8 @@ The link opens the website, joins the room, and keeps a private reconnect key in
 Run:
 
 ```powershell
-npm run check
-npm run smoke
+yarn check
+yarn smoke
 ```
 
 The smoke test starts a temporary server, creates a room, opens the room URL, joins as a second player, reconnects the host, starts the draft, then verifies a solo CPU room can auto-complete its draft.
