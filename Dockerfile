@@ -4,7 +4,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY package.json ./
-RUN npm install --omit=dev
+RUN corepack enable && yarn install --production=true --non-interactive
 
 COPY server.js EVENTS.md README.md ./
 COPY public ./public
