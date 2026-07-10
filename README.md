@@ -7,8 +7,8 @@ Deployable Socket.IO website for live remote cricket draft rooms.
 ```powershell
 git clone https://github.com/thedhoklamonger/cricket-1v1.git
 cd cricket-1v1
-pnpm install
-pnpm start
+npm install
+npm start
 ```
 
 Open:
@@ -34,8 +34,8 @@ Anyone opening that room link is taken straight into the room with their saved n
 ## Verify
 
 ```powershell
-pnpm check
-pnpm smoke
+npm run check
+npm run smoke
 ```
 
 The smoke test creates a room, loads its `/room/ROOMCODE` URL, joins from a second simulated player, reconnects the host, starts the draft, then creates a solo CPU room and auto-completes that draft.
@@ -63,8 +63,8 @@ See `EVENTS.md` for the event contract and `DEPLOYMENT.md` for publishing instru
 
 ```text
 Runtime: Node 20 or newer
-Build command: corepack enable && pnpm install --frozen-lockfile
-Start command: pnpm start
+Build command: npm install
+Start command: node server.js
 Health check path: /healthz
 Instance count: 1
 ```
